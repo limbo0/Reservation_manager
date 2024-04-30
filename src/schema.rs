@@ -8,5 +8,6 @@ diesel::table! {
         seating -> Varchar,
         advance -> Bool,
         confirmed -> Bool,
+        reservation_date -> Date,
     }
 }
