@@ -1,8 +1,9 @@
 use axum::response::{Html, IntoResponse, Response};
+use chrono::NaiveDate;
 use diesel::{pg::PgConnection, prelude::*};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
-use time::{Date, Time};
+use time::Time;
 
 #[derive(Clone, Debug, Queryable, Selectable, Serialize, Deserialize)]
 #[diesel(table_name = crate::schema::reservation)]
@@ -17,22 +18,11 @@ pub struct Reservation {
     pub advance_amount: Option<i32>,
     pub advance_method: Option<String>,
     pub confirmed: bool,
-    pub reservation_date: Date,
+    pub reservation_date: NaiveDate,
     pub reservation_time: Time,
 }
-impl Reservation {
-    fn update_name_with_id(db: &mut PgConnection, resv_id: i32, new_resv_name: String) -> Self {
-        use crate::reservation::dsl::*;
-        let mut resv_data = reservation
-            .filter(id.eq(resv_id))
-            .select(Reservation::as_select())
-            .load(db)
-            .expect("Couldn't find reservation with provided id.");
 
-        resv_data[0].name = new_resv_name;
-        resv_data[0].to_owned()
-    }
-}
+//TODO: not too sure about this.
 impl IntoResponse for Reservation {
     fn into_response(self) -> Response {
         let html = format!("id: {:?}, name: {:?}, contact: {:?}, seating: {:?}, specific_seating_requested: {:?}, advance: {:?}, advance_amount: {:?}, advance_method: {:?}, confirmed: {:?}, reservation_date: {:?}, reservation_time: {:?}", self.id, self.name, self.contact, self.seating, self.specific_seating_requested, self.advance, self.advance_amount, self.advance_method, self.confirmed, self.reservation_date, self.reservation_time);
@@ -72,6 +62,6 @@ pub struct NewResv {
     pub advance_method: Option<String>,
     pub advance_amount: Option<i32>,
     pub confirmed: bool,
-    pub reservation_date: Date,
+    pub reservation_date: NaiveDate,
     pub reservation_time: Time,
 }

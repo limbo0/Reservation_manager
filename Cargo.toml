@@ -8,8 +8,8 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.82"
 axum = "0.7.5"
-time = { version = "0.3.36", features = ["serde"]} 
-diesel = { version = "2.1.5", features = ["postgres", "time"] }
+time = { version = "0.3.36", features = ["serde", "macros"]} 
+diesel = { version = "2.1.5", features = ["postgres", "time", "chrono"] }
 dotenvy = "0.15.7"
 reqwest = { version = "0.12.4", features = ["json"] }
 
@@ -17,6 +17,4 @@ serde = { version = "1.0.197", features = ["serde_derive"] }
 serde_json = "1.0.116"
 tokio = { version = "=1.35.1", features = ["full"] }
 axum-macros = "0.4.1"
-http-body = "1.0.0"
-bytes = "1.6.0"
-http = "1.1.0"
+chrono = { version = "0.4.38", features = ["serde"]} 

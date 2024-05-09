@@ -58,11 +58,12 @@ pub async fn create_resv(Json(payload): Json<NewResv>) {
 
 #[axum_macros::debug_handler]
 pub async fn read_resv_json() -> impl IntoResponse {
-    use self::schema::reservation::dsl::*;
+    use self::schema::reservation::dsl::{reservation, reservation_date};
+
+    //TODO: Set it to Utc instead of local.
+    // check the current date and return all reservations for that date.
     let results = reservation
-        .filter(
-            reservation_date.gt(Date::from_calendar_date(2024i32, Month::January, 1u8).unwrap()),
-        )
+        .filter(reservation_date.eq(chrono::offset::Local::now().date_naive()))
         .limit(5)
         .select(Reservation::as_select())
         .load(&mut establish_connection())
@@ -73,7 +74,7 @@ pub async fn read_resv_json() -> impl IntoResponse {
 
 /// Returns reservation with matching date.
 #[axum_macros::debug_handler]
-pub async fn check_resv_with_date(Query(date): Query<MyDate>) -> Json<Vec<Reservation>> {
+pub async fn read_resv_with_date(Query(date): Query<MyDate>) -> Json<Vec<Reservation>> {
     use self::schema::reservation::dsl::*;
 
     let resv_date = Date::from_calendar_date(date.year, date.month, date.day)
@@ -91,7 +92,7 @@ pub async fn check_resv_with_date(Query(date): Query<MyDate>) -> Json<Vec<Reserv
 }
 
 /// Returns reservation with matching id.
-pub async fn check_resv_with_id(Path(resv_id): Path<i32>) -> impl IntoResponse {
+pub async fn read_resv_with_id(Path(resv_id): Path<i32>) -> impl IntoResponse {
     use self::schema::reservation::dsl::*;
     let results = reservation
         .filter(id.eq(resv_id))
@@ -106,13 +107,29 @@ pub async fn check_resv_with_id(Path(resv_id): Path<i32>) -> impl IntoResponse {
 //NOTE: UPDATE
 /// Checks if the reservation with the id exists, if true then update.
 pub async fn update_resv_name_with_id(Path((resv_id, new_name)): Path<(i32, String)>) {
-    use self::schema::reservation::dsl::*;
+    use self::schema::reservation::dsl::{id, name, reservation};
 
     diesel::update(reservation)
         .filter(id.eq(resv_id))
         .set(name.eq(new_name))
         .execute(&mut establish_connection())
-        .expect("Failed to update new_name");
+        .expect(&format!(
+            "Failed to update name for reservation Id: {:?}",
+            resv_id
+        ));
+}
+
+///NOTE: DELETE
+pub async fn delete_resv_with_id(Path(resv_id): Path<i32>) {
+    use self::schema::reservation::dsl::{id, reservation};
+
+    diesel::delete(reservation)
+        .filter(id.eq(resv_id))
+        .execute(&mut establish_connection())
+        .expect(&format!(
+            "Failed to delete reservation with Id: {:?}",
+            resv_id
+        ));
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -171,8 +188,8 @@ mod tests {
 
         //NOTE: while making a get request, pass the month as number not as type(Month)
         let url = format!(
-            "http://127.0.0.1:3000/check_resv?year={}&month={}&day={}",
-            date.year, date.month, date.day
+            "http://127.0.0.1:3000/check_resv_with_date?year={}&month={}&day={}",
+            date.year, 5, date.day
         );
 
         // let url = "http://127.0.0.1:3000/check_resv?year=2024&month=5&day=25";
@@ -206,7 +223,7 @@ mod tests {
         let client = reqwest::Client::new();
 
         let response = client
-            .post("http://127.0.0.1:3000/insert_resv")
+            .post("http://127.0.0.1:3000/create_resv")
             .json(&payload)
             .send()
             .await?;
