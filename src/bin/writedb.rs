@@ -11,8 +11,32 @@ use time::{Date, Month, Time};
 async fn main() -> anyhow::Result<()> {
     let client = Client::new();
     create_new_reservation(client).await?;
+    // insert_resv(client).await?;
 
     Ok(())
+}
+
+async fn insert_resv(client: Client) -> anyhow::Result<()> {
+    let response = client
+        .post("http://127.0.0.1:3000/create_resv")
+        .send()
+        .await?;
+
+    // Check if the request was successful
+    if response.status().is_success() {
+        println!("Resv created successfully!");
+    } else {
+        println!("Failed to create resv: {}", response.status());
+    }
+
+    Ok(())
+}
+#[derive(Serialize, Deserialize)]
+pub(crate) enum PaymentMethod {
+    NotPaid,
+    Cash,
+    Card(Option<String>),
+    Gpay(Option<String>),
 }
 
 /// Construct a new reservation
@@ -57,18 +81,44 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
         _ => false,
     };
 
-    //TODO: Advance method constraints apply.
     // Only predefined options should be available.
     let advance_method = match advance {
         true => {
-            println!("\nIf advance received, how was the advance paid?\n");
+            println!("\nHow was the advance paid? Enter: 0 -> NotPaid, 1 -> Cash, 2 -> Card, 3 -> Gpay\n");
             let mut buf_advance_method = String::new();
             stdin()
                 .read_line(&mut buf_advance_method)
                 .expect("Adcance payment method update failed.");
-            buf_advance_method
+
+            match buf_advance_method
+                .trim()
+                .parse::<i32>()
+                .expect("failed to parse PaymentMethod")
+            {
+                0 => PaymentMethod::NotPaid,
+                1 => PaymentMethod::Cash,
+                2 => {
+                    let mut buf_card_slip_id = String::new();
+                    println!("Enter card_slip_id of the payment.");
+                    stdin()
+                        .read_line(&mut buf_card_slip_id)
+                        .expect("Failed to read card_slip_id to buffer.");
+
+                    PaymentMethod::Card(Some(String::from(buf_card_slip_id.trim())))
+                }
+                3 => {
+                    let mut buf_gpay_slip_id = String::new();
+                    println!("Enter gpay_slip_id of the payment.");
+                    stdin()
+                        .read_line(&mut buf_gpay_slip_id)
+                        .expect("Failed to read gpay_slip_id to buffer.");
+
+                    PaymentMethod::Card(Some(String::from(buf_gpay_slip_id.trim())))
+                }
+                _ => PaymentMethod::NotPaid,
+            }
         }
-        false => String::from("Not paid"),
+        false => PaymentMethod::NotPaid,
     };
 
     let advance_amount = match advance {
@@ -144,7 +194,7 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
         "seating": seating.trim(),
         "specific_seating_requested": specific_seating_requested,
         "advance": advance,
-        "advance_method": advance_method.trim(),
+        "advance_method": advance_method,
         "advance_amount": advance_amount,
         "confirmed": confirmed,
         "reservation_date": reservation_date,

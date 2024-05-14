@@ -1,15 +1,22 @@
-use self::models::{NewResv, Reservation};
+use self::models::{NewResv, PaymentMethod, PaymentMode, Reservation};
 use crate::schema::reservation;
 use axum::{
-    extract::{Json, Path, Query},
+    extract::{Json, Path, Query, State},
     response::{Html, IntoResponse},
 };
-use diesel::pg::PgConnection;
+use chrono::NaiveDate;
+
 use diesel::prelude::*;
+use diesel::{
+    backend::Backend,
+    deserialize::{FromSql, FromSqlRow},
+    r2d2::ConnectionManager,
+    serialize::{Output, ToSql},
+    AsExpression, PgConnection,
+};
 use dotenvy::dotenv;
 use serde::{Deserialize, Serialize};
-use std::{env, time::SystemTime};
-use time::{Date, Month};
+use std::env;
 
 pub mod models;
 pub mod schema;
@@ -22,14 +29,41 @@ pub fn establish_connection() -> PgConnection {
         .unwrap_or_else(|_| panic!("Error connecting to {}", database_url))
 }
 
-// On backends that support it, you can call `get_result` instead of `execute`
-// can explicitly return an expression by using the `returning` method before
-// to have `RETURNING *` automatically appended to the query. Alternatively, you
-// getting the result.
+// Test purpose insertion.
+pub async fn insert_resv() {
+    let data = NewResv {
+        name: String::from("Boa Hancock"),
+        contact: String::from("+91123456789"),
+        seating: String::from("MainT7"),
+        specific_seating_requested: true,
+        advance: true,
+        advance_amount: Some(5000i32),
+        advance_method: serde_json::value::to_value(PaymentMethod {
+            mode_of_payment: PaymentMode::Card,
+            payment_transaction_id: String::from("0x1dac45"),
+            payment_receiver: String::from("Limboo"),
+            payment_received_date: NaiveDate::from_ymd_opt(2024i32, 05u32, 14u32)
+                .expect("failed to strcuture date while testing insert post request"),
+        })
+        .expect("failed to convert payment method to json"),
+        confirmed: true,
+        reservation_date: NaiveDate::from_ymd_opt(2024i32, 05u32, 14u32)
+            .expect("failed to strcuture date while testing insert post request"),
+        reservation_time: time::Time::from_hms(14u8, 0u8, 0u8)
+            .expect("failed to structure time for reservation."),
+    };
+
+    use self::schema::reservation::dsl::reservation;
+    diesel::insert_into(reservation)
+        .values(&data)
+        .execute(&mut establish_connection())
+        .expect("Error saving new resv");
+}
 
 //NOTE: CREATE
 pub async fn create_resv(Json(payload): Json<NewResv>) {
     // build the data structure
+    use self::schema::reservation::dsl::reservation;
     let new_resv = NewResv {
         name: payload.name,
         contact: payload.contact,
@@ -44,18 +78,16 @@ pub async fn create_resv(Json(payload): Json<NewResv>) {
     };
 
     // actually insert the data.
-    diesel::insert_into(reservation::table)
+    diesel::insert_into(reservation)
         .values(&new_resv)
-        .returning(Reservation::as_returning())
         .execute(&mut establish_connection())
         .expect("Error saving new resv");
 }
 
 //NOTE: READ
-//NOTE: Return with ascending order of upcoming reservations.
-// Shows all the confirmed reservation while the page is loaded.
-// Returning in Html, to implement Htmx (test and see)
-
+//NOTE: Return with ascending order in time of upcoming reservations.
+//TODO: Returning in Html, to implement Htmx (test and see)
+/// Check the current date and return all reservations for that date.
 #[axum_macros::debug_handler]
 pub async fn read_resv_json() -> impl IntoResponse {
     use self::schema::reservation::dsl::{reservation, reservation_date};
@@ -75,9 +107,9 @@ pub async fn read_resv_json() -> impl IntoResponse {
 /// Returns reservation with matching date.
 #[axum_macros::debug_handler]
 pub async fn read_resv_with_date(Query(date): Query<MyDate>) -> Json<Vec<Reservation>> {
-    use self::schema::reservation::dsl::*;
+    use self::schema::reservation::dsl::{reservation, reservation_date};
 
-    let resv_date = Date::from_calendar_date(date.year, date.month, date.day)
+    let resv_date = NaiveDate::from_ymd_opt(date.year, date.month, date.day)
         .expect("failed creating date for query");
 
     let results = reservation
@@ -92,21 +124,29 @@ pub async fn read_resv_with_date(Query(date): Query<MyDate>) -> Json<Vec<Reserva
 }
 
 /// Returns reservation with matching id.
-pub async fn read_resv_with_id(Path(resv_id): Path<i32>) -> impl IntoResponse {
-    use self::schema::reservation::dsl::*;
+//TODO: Handle while reservation for Id is not found.
+pub async fn read_resv_with_id(Path(resv_id): Path<uuid::Uuid>) -> impl IntoResponse {
+    use self::schema::reservation::dsl::{id, reservation};
     let results = reservation
         .filter(id.eq(resv_id))
         .select(Reservation::as_select())
         .load(&mut establish_connection())
         .expect("Couldn't find reservation with provided id.");
 
-    Json(results)
-    // Html(results[0].to_string())
+    // Since all the id's are unique it should always only return one value.
+    if results.len() == 1 {
+        Html(results[0].to_string())
+    } else {
+        Html(format!(
+            "Couldn't find reservation with the provided id: {:?}",
+            resv_id
+        ))
+    }
 }
 
 //NOTE: UPDATE
-/// Checks if the reservation with the id exists, if true then update.
-pub async fn update_resv_name_with_id(Path((resv_id, new_name)): Path<(i32, String)>) {
+/// Checks if the reservation with the id exists, if true then update name.
+pub async fn update_resv_name_with_id(Path((resv_id, new_name)): Path<(uuid::Uuid, String)>) {
     use self::schema::reservation::dsl::{id, name, reservation};
 
     diesel::update(reservation)
@@ -119,8 +159,22 @@ pub async fn update_resv_name_with_id(Path((resv_id, new_name)): Path<(i32, Stri
         ));
 }
 
+/// Checks if the reservation with the id exists, if true then update date.
+pub async fn update_resv_date_with_id(Path((resv_id, new_date)): Path<(uuid::Uuid, NaiveDate)>) {
+    use self::schema::reservation::dsl::{id, reservation, reservation_date};
+
+    diesel::update(reservation)
+        .filter(id.eq(resv_id))
+        .set(reservation_date.eq(new_date))
+        .execute(&mut establish_connection())
+        .expect(&format!(
+            "Failed to update date for reservation Id: {:?}",
+            resv_id
+        ));
+}
+
 ///NOTE: DELETE
-pub async fn delete_resv_with_id(Path(resv_id): Path<i32>) {
+pub async fn delete_resv_with_id(Path(resv_id): Path<uuid::Uuid>) {
     use self::schema::reservation::dsl::{id, reservation};
 
     diesel::delete(reservation)
@@ -135,8 +189,8 @@ pub async fn delete_resv_with_id(Path(resv_id): Path<i32>) {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct MyDate {
     year: i32,
-    month: Month,
-    day: u8,
+    month: u32,
+    day: u32,
 }
 impl std::fmt::Display for MyDate {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -180,16 +234,15 @@ mod tests {
     async fn test_check_resv() -> anyhow::Result<()> {
         let date = MyDate {
             year: 2024i32,
-            month: Month::March,
-            day: 25u8,
+            month: 05u32,
+            day: 25u32,
         };
 
         let client = reqwest::Client::new();
 
-        //NOTE: while making a get request, pass the month as number not as type(Month)
         let url = format!(
             "http://127.0.0.1:3000/check_resv_with_date?year={}&month={}&day={}",
-            date.year, 5, date.day
+            date.year, date.month, date.day
         );
 
         // let url = "http://127.0.0.1:3000/check_resv?year=2024&month=5&day=25";
@@ -216,7 +269,7 @@ mod tests {
             "advance_amount": Some(5000i32),
             "advance_method": Some("Card"),
             "confirmed": false,
-            "reservation_date": Date::from_calendar_date(2024i32, Month::May, 25u8).expect("failed to strcuture date while testing insert post request"),
+            "reservation_date": NaiveDate::from_ymd_opt(2024i32, 05u32, 25u32).expect("failed to strcuture date while testing insert post request"),
             "reservation_time": time::Time::from_hms(14u8, 0u8,0u8).expect("failed to structure time for reservation."),
         });
 
