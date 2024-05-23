@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.82"
-axum = "0.7.5"
+axum = { version = "0.7.5", features = ["macros"]}
 time = { version = "0.3.36", features = ["serde", "macros"]} 
 diesel = { version = "2.1.5", features = ["postgres", "time", "chrono", "r2d2", "serde_json", "uuid"] }
 dotenvy = "0.15.7"
@@ -21,3 +21,8 @@ tokio = { version = "=1.35.1", features = ["full"] }
 axum-macros = "0.4.1"
 chrono = { version = "0.4.38", features = ["serde"]} 
 r2d2 = "0.8.10"
+hex-literal = "0.4.1"
+base64ct = {version = "1.6.0", features = ["alloc"]}
+lettre = { version = "0.11.7", features = ["builder", "tokio1-native-tls"] }
+rust-argon2 = "2.1.0"
+rand = "0.8.5"

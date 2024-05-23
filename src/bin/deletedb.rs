@@ -22,17 +22,17 @@ async fn delete_db_with_id(client: Client) -> anyhow::Result<()> {
             "http://127.0.0.1:3000/delete_resv_with_id/{:?}",
             resv_id
                 .trim()
-                .parse::<i32>()
+                .parse::<uuid::Uuid>()
                 .expect("Failed to parse reservation id.")
         ))
         .send()
         .await?;
 
     if response.status().is_success() {
-        println!("Resv deleted sucessfullt.");
+        println!("\nResv deleted sucessfully.\n");
     } else {
         println!(
-            "Failed to delete reservation with status code {:?}",
+            "\nFailed to delete reservation with status code {:?}\n",
             response.status()
         );
     }

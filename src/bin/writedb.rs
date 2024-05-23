@@ -1,11 +1,11 @@
-use diesel_demo::*;
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
-use std::{
-    io::{stdin, Read},
-    str::FromStr,
+use chrono::Datelike;
+use diesel_demo::{
+    helpers::let_user_input,
+    models::{PaymentMethod, PaymentMode},
 };
-use time::{Date, Month, Time};
+use reqwest::Client;
+use std::io::{stdin, Read};
+use time::Time;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -14,29 +14,6 @@ async fn main() -> anyhow::Result<()> {
     // insert_resv(client).await?;
 
     Ok(())
-}
-
-async fn insert_resv(client: Client) -> anyhow::Result<()> {
-    let response = client
-        .post("http://127.0.0.1:3000/create_resv")
-        .send()
-        .await?;
-
-    // Check if the request was successful
-    if response.status().is_success() {
-        println!("Resv created successfully!");
-    } else {
-        println!("Failed to create resv: {}", response.status());
-    }
-
-    Ok(())
-}
-#[derive(Serialize, Deserialize)]
-pub(crate) enum PaymentMethod {
-    NotPaid,
-    Cash,
-    Card(Option<String>),
-    Gpay(Option<String>),
 }
 
 /// Construct a new reservation
@@ -52,10 +29,6 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
     stdin().read_to_string(&mut contact).unwrap();
 
     // _________________________________________________________________________________________
-    println!("\nEnter table number\n");
-    let mut seating = String::new();
-    stdin().read_to_string(&mut seating).unwrap();
-
     println!("\nSpecific seating requested?\n");
     let mut buf = String::new();
     stdin()
@@ -66,6 +39,16 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
         "Y" | "y" => true,
         "N" | "n" => false,
         _ => false,
+    };
+
+    let seating = match specific_seating_requested {
+        true => {
+            println!("\nEnter table which the guest has requested.\n");
+            let mut seating = String::new();
+            stdin().read_to_string(&mut seating).unwrap();
+            seating
+        }
+        false => String::from("Table not specifically requested"),
     };
 
     // _________________________________________________________________________________________
@@ -81,44 +64,73 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
         _ => false,
     };
 
-    // Only predefined options should be available.
+    // Only predefined mode of payment should be possible.
     let advance_method = match advance {
         true => {
             println!("\nHow was the advance paid? Enter: 0 -> NotPaid, 1 -> Cash, 2 -> Card, 3 -> Gpay\n");
-            let mut buf_advance_method = String::new();
+            let mut buf_payment_mode = String::new();
             stdin()
-                .read_line(&mut buf_advance_method)
+                .read_line(&mut buf_payment_mode)
                 .expect("Adcance payment method update failed.");
 
-            match buf_advance_method
+            match buf_payment_mode
                 .trim()
                 .parse::<i32>()
                 .expect("failed to parse PaymentMethod")
             {
-                0 => PaymentMethod::NotPaid,
-                1 => PaymentMethod::Cash,
+                0 => serde_json::value::to_value(PaymentMethod {
+                    mode_of_payment: PaymentMode::NotPaid,
+                    payment_transaction_id: None,
+                    payment_receiver: None,
+                    payment_received_date: None,
+                })
+                .expect("failed to convert payment method to json"),
+                1 => {
+                    let (tx_id, receiver, received_date) = let_user_input(1)
+                        .await
+                        .expect("Failed to construct information on payment method");
+                    serde_json::value::to_value(PaymentMethod {
+                        mode_of_payment: PaymentMode::Cash,
+                        payment_transaction_id: tx_id,
+                        payment_receiver: Some(receiver),
+                        payment_received_date: Some(received_date),
+                    })
+                    .expect("failed to convert payment method to json")
+                }
                 2 => {
-                    let mut buf_card_slip_id = String::new();
-                    println!("Enter card_slip_id of the payment.");
-                    stdin()
-                        .read_line(&mut buf_card_slip_id)
-                        .expect("Failed to read card_slip_id to buffer.");
-
-                    PaymentMethod::Card(Some(String::from(buf_card_slip_id.trim())))
+                    let (tx_id, receiver, received_date) = let_user_input(2)
+                        .await
+                        .expect("Failed to construct information on payment method");
+                    serde_json::value::to_value(PaymentMethod {
+                        mode_of_payment: PaymentMode::Card,
+                        payment_transaction_id: tx_id,
+                        payment_receiver: Some(receiver),
+                        payment_received_date: Some(received_date),
+                    })
+                    .expect("failed to convert payment method to json")
                 }
                 3 => {
-                    let mut buf_gpay_slip_id = String::new();
-                    println!("Enter gpay_slip_id of the payment.");
-                    stdin()
-                        .read_line(&mut buf_gpay_slip_id)
-                        .expect("Failed to read gpay_slip_id to buffer.");
-
-                    PaymentMethod::Card(Some(String::from(buf_gpay_slip_id.trim())))
+                    let (tx_id, receiver, received_date) = let_user_input(3)
+                        .await
+                        .expect("Failed to construct information on payment method");
+                    serde_json::value::to_value(PaymentMethod {
+                        mode_of_payment: PaymentMode::Gpay,
+                        payment_transaction_id: tx_id,
+                        payment_receiver: Some(receiver),
+                        payment_received_date: Some(received_date),
+                    })
+                    .expect("failed to convert payment method to json")
                 }
-                _ => PaymentMethod::NotPaid,
+                _ => panic!("Unknown payment mode entered"),
             }
         }
-        false => PaymentMethod::NotPaid,
+        false => serde_json::value::to_value(PaymentMethod {
+            mode_of_payment: PaymentMode::NotPaid,
+            payment_transaction_id: None,
+            payment_receiver: None,
+            payment_received_date: None,
+        })
+        .expect("failed to convert payment method to json"),
     };
 
     let advance_amount = match advance {
@@ -149,24 +161,74 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
     };
 
     // _________________________________________________________________________________________
-    println!("\nEnter Year\n");
-    let mut year = String::new();
-    stdin().read_line(&mut year).expect("year error");
+    let current_date = chrono::offset::Local::now().date_naive();
+    println!(
+        "\nIs the reservation for today: {:?}?. Enter Y or N\n",
+        current_date
+    );
+    let mut buf = String::new();
+    stdin()
+        .read_line(&mut buf)
+        .expect("failed to read reservation for today to buf");
 
-    println!("\nEnter Month\n");
-    let mut month = String::new();
-    stdin().read_line(&mut month).expect("month error");
+    let reservation_date = match buf.trim() {
+        "y" | "Y" | "yes" | "Yes" => current_date,
+        "n" | "N" | "no" | "No" => {
+            println!("\nEnter Date\n");
+            let mut day = String::new();
+            stdin().read_line(&mut day).expect("day error");
 
-    println!("\nEnter Date\n");
-    let mut day = String::new();
-    stdin().read_line(&mut day).expect("day error");
+            // _________________________________________________________________________________________
+            let mut this_month = String::new();
+            println!(
+                "\nIs the reservation for this month: {:?}?. Enter Y or N\n",
+                current_date.month()
+            );
+            stdin()
+                .read_line(&mut this_month)
+                .expect("failed to read this year to buf");
 
-    let reservation_date = chrono::NaiveDate::from_ymd_opt(
-        year.parse::<i32>().expect("Failed to parse year."),
-        month.parse::<u32>().expect("Failed to parse month."),
-        day.parse::<u32>().expect("Failed to parse day."),
-    )
-    .expect("Failed to structure reservation date.");
+            let month = match this_month.trim() {
+                "y" | "Y" | "yes" | "Yes" => current_date.month(),
+                "n" | "N" | "no" | "No" => {
+                    println!("\nEnter month\n");
+                    let mut month = String::new();
+                    stdin().read_line(&mut month).expect("month error");
+                    month.parse::<u32>().expect("Failed to parse month.")
+                }
+                _ => panic!("Reservation month has to be answered (Y, Yes, N, No) only"),
+            };
+
+            // _________________________________________________________________________________________
+            let mut this_year = String::new();
+            println!(
+                "\nIs the reservation for this year: {:?}?. Enter Y or N\n",
+                current_date.year()
+            );
+            stdin()
+                .read_line(&mut this_year)
+                .expect("failed to read this year to buf");
+
+            let year = match this_year.trim() {
+                "y" | "Y" | "yes" | "Yes" => current_date.year(),
+                "n" | "N" | "no" | "No" => {
+                    println!("\nEnter Year\n");
+                    let mut year = String::new();
+                    stdin().read_line(&mut year).expect("year error");
+                    year.parse::<i32>().expect("Failed to parse year.")
+                }
+                _ => panic!("Reservation year has to be answered (Y, Yes, N, No) only"),
+            };
+
+            chrono::NaiveDate::from_ymd_opt(
+                year,
+                month,
+                day.parse::<u32>().expect("Failed to parse day."),
+            )
+            .expect("Failed to structure reservation date.")
+        }
+        _ => panic!("Reservation for today has to be answered (Y, Yes, N, No) only"),
+    };
 
     // _________________________________________________________________________________________
     println!("\nEnter time: Hour\n");
@@ -210,6 +272,7 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
     // Check if the request was successful
     if response.status().is_success() {
         println!("Resv created successfully!");
+        println!("returned data: {:?}", response.text().await?);
     } else {
         println!("Failed to create resv: {}", response.status());
     }
