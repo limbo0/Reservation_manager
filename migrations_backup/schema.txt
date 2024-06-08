@@ -48,10 +48,4 @@ diesel::table! {
 diesel::joinable!(propertyusers -> property (property_id));
 diesel::joinable!(propertyusers -> roles (user_role));
 diesel::joinable!(reservation -> property (property_id));
-
-diesel::allow_tables_to_appear_in_same_query!(
-    property,
-    propertyusers,
-    reservation,
-    roles,
-);
+diesel::allow_tables_to_appear_in_same_query!(property, propertyusers, reservation, roles,);

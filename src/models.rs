@@ -200,6 +200,7 @@ impl Queryable<property::SqlType, DB> for Property {
 #[derive(Serialize, Deserialize, Insertable)]
 #[diesel(table_name = crate::schema::property)]
 pub struct NewProperty {
+    pub property_id: uuid::Uuid,
     pub property_name: String,
     #[serde(skip_serializing)]
     pub property_password: String,
@@ -231,6 +232,16 @@ pub struct NewPropertyUser {
     pub user_password: String,
     pub user_role: i32,
     pub property_id: Uuid,
+}
+
+#[repr(i32)]
+#[derive(Debug, Serialize, Deserialize, Clone, AsExpression)]
+#[diesel(sql_type = Integer)]
+pub enum Role {
+    Dev = 0,
+    PropertyAdmin = 1,
+    PropertyManager = 2,
+    PropertyUser = 3,
 }
 
 #[derive(Queryable, Selectable, Insertable, Debug, PartialEq, Serialize, Deserialize)]

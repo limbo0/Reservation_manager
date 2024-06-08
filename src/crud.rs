@@ -6,6 +6,7 @@ use axum::{
 };
 use chrono::NaiveDate;
 use diesel::prelude::*;
+use leptos::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -42,8 +43,8 @@ pub async fn create_resv(
 }
 
 //NOTE: READ
-//NOTE: Return with ascending order in time of upcoming reservations.
 //TODO: Match the property id and only return reservation of that id.
+// Implement authorization.
 /// Check the current date and return all reservations for that date.
 #[axum_macros::debug_handler]
 pub async fn read_resv_json(
@@ -194,7 +195,7 @@ mod tests {
         let client = reqwest::Client::new();
         let resv_id = 1;
 
-        let url = format!("http://127.0.0.1:3000/update_resv/{}", resv_id);
+        let url = format!("http://127.0.0.1:3000/check_resv_with_id/{}", resv_id);
 
         let response = client.get(url).send().await?.text().await?;
 
@@ -231,17 +232,18 @@ mod tests {
     ///NOTE: This test needs to be updated before using again.
     async fn test_insert_resv() -> anyhow::Result<()> {
         let payload = serde_json::json!({
-            "name": String::from("Jason"),
-            "contact": String::from("+91123456789"),
-            "seating": String::from("MainT7"),
-            "specific_seating_requested": true,
-            "advance": false,
-            "advance_amount": Some(5000i32),
-            "advance_method": Some("Card"),
-            "confirmed": false,
-            "reservation_date": NaiveDate::from_ymd_opt(2024i32, 05u32, 25u32).expect("failed to strcuture date while testing insert post request"),
-            "reservation_time": time::Time::from_hms(14u8, 0u8,0u8).expect("failed to structure time for reservation."),
-    e   });
+              "name": String::from("Jason"),
+              "contact": String::from("+91123456789"),
+              "seating": String::from("MainT7"),
+              "specific_seating_requested": true,
+              "advance": false,
+              "advance_amount": Some(5000i32),
+              "advance_method": Some("Card"),
+              "confirmed": false,
+              "reservation_date": NaiveDate::from_ymd_opt(2024i32, 05u32, 25u32).expect("failed to strcuture date while testing insert post request"),
+              "reservation_time": time::Time::from_hms(14u8, 0u8,0u8).expect("failed to structure time for reservation."),
+              "property_id": Uuid::new_v4(),
+        });
 
         let client = reqwest::Client::new();
 

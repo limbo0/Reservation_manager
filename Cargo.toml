@@ -26,3 +26,10 @@ base64ct = {version = "1.6.0", features = ["alloc"]}
 lettre = { version = "0.11.7", features = ["builder", "tokio1-native-tls"] }
 rust-argon2 = "2.1.0"
 rand = "0.8.5"
+tower = "0.4.13"
+jsonwebtoken = "9.3.0"
+http = "1.1.0"
+
+# frontend
+console_error_panic_hook = "0.1.7"
+leptos = { version = "0.6.12", features = ["csr"] }

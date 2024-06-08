@@ -6,7 +6,7 @@ use axum::{
 };
 use diesel::prelude::*;
 
-//TODO: secure this function call.
+//TODO: Only admin level role can call this.
 #[axum_macros::debug_handler]
 pub async fn create_new_role(
     State(conn): State<SharedPooledConnection>,

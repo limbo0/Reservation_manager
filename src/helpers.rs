@@ -6,6 +6,7 @@ use diesel::PgConnection;
 use rand::RngCore;
 use std::io::stdin;
 
+/// Password hasher.
 pub async fn salt_password(secret: String) -> anyhow::Result<String> {
     let mut salt = [0u8; 8];
     rand::thread_rng().fill_bytes(&mut salt);
@@ -17,26 +18,30 @@ pub async fn salt_password(secret: String) -> anyhow::Result<String> {
 }
 
 /// Helper function to construct data structure for PaymentMethod for reservation input in db.
-/// Input handler: if 1 Aka PaymentMode::Cash is passed then we dont care about tx_id.
-pub async fn let_user_input(
+/// All the payment modes are handled similarly besides payment mode cash.
+pub async fn payment_mode_handler(
     payment_mode: i32,
 ) -> anyhow::Result<(Option<String>, String, NaiveDate)> {
     let payment_method_data = match payment_mode {
+        // Handler if the payment mode is cash.
+        // Payment_transaction_id is returned None.
         1 => {
             let mut receiver = String::new();
             println!("\nEnter name of the payment receiver.\n");
             stdin()
                 .read_line(&mut receiver)
-                .expect("Failed to read tx_id to  the buffer");
+                .expect("Failed to read payment receiver to the buffer");
 
             let mut received_today = String::new();
             println!("\nAdvance received_today? Enter Y or N\n");
             stdin()
                 .read_line(&mut received_today)
-                .expect("Failed to read tx_id to  the buffer");
+                .expect("Failed to read reveived_today to the buffer");
 
             let payment_received_date = match received_today.trim() {
+                // If true then we construct todays date.
                 "Y" | "y" | "yes" | "Yes" => chrono::offset::Local::now().date_naive(),
+                // If false we ask for user input.
                 "N" | "n" | "no" | "No" => {
                     println!("\nEnter payment received year\n");
                     let mut year = String::new();
@@ -62,6 +67,7 @@ pub async fn let_user_input(
 
             (None, receiver, payment_received_date)
         }
+        // All payment modes other than cash is handled the same.
         _ => {
             let mut tx_id = String::new();
             println!("\nEnter tx_id of payment receipt.\n");
@@ -111,39 +117,4 @@ pub async fn let_user_input(
     };
 
     Ok(payment_method_data)
-}
-
-// Test purpose insertion.
-pub async fn insert_resv(conn: &mut PgConnection) {
-    let data = NewResv {
-        name: String::from("Boa Hancock"),
-        contact: String::from("+91123456789"),
-        seating: String::from("MainT7"),
-        specific_seating_requested: true,
-        advance: true,
-        advance_method: serde_json::value::to_value(PaymentMethod {
-            mode_of_payment: PaymentMode::Card,
-            payment_transaction_id: Some(String::from("0x1dac45")),
-            payment_receiver: Some(String::from("Limboo")),
-            payment_received_date: Some(
-                NaiveDate::from_ymd_opt(2024i32, 05u32, 14u32)
-                    .expect("failed to strcuture date while testing insert post request"),
-            ),
-        })
-        .expect("failed to convert payment method to json"),
-        advance_amount: Some(5000i32),
-        confirmed: true,
-        reservation_date: NaiveDate::from_ymd_opt(2024i32, 05u32, 14u32)
-            .expect("failed to strcuture date while testing insert post request"),
-        reservation_time: time::Time::from_hms(14u8, 0u8, 0u8)
-            .expect("failed to structure time for reservation."),
-        property_id: uuid::Uuid::new_v4(),
-    };
-
-    use crate::schema::reservation::dsl::reservation;
-
-    diesel::insert_into(reservation)
-        .values(&data)
-        .execute(conn)
-        .expect("Error saving new resv");
 }

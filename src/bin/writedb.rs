@@ -1,6 +1,6 @@
 use chrono::Datelike;
 use diesel_demo::{
-    helpers::let_user_input,
+    helpers::payment_mode_handler,
     models::{PaymentMethod, PaymentMode},
 };
 use reqwest::Client;
@@ -67,7 +67,7 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
     // Only predefined mode of payment should be possible.
     let advance_method = match advance {
         true => {
-            println!("\nHow was the advance paid? Enter: 0 -> NotPaid, 1 -> Cash, 2 -> Card, 3 -> Gpay\n");
+            println!("\nHow was the advance paid? 1 -> Cash, 2 -> Card, 3 -> Gpay\n");
             let mut buf_payment_mode = String::new();
             stdin()
                 .read_line(&mut buf_payment_mode)
@@ -78,15 +78,8 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
                 .parse::<i32>()
                 .expect("failed to parse PaymentMethod")
             {
-                0 => serde_json::value::to_value(PaymentMethod {
-                    mode_of_payment: PaymentMode::NotPaid,
-                    payment_transaction_id: None,
-                    payment_receiver: None,
-                    payment_received_date: None,
-                })
-                .expect("failed to convert payment method to json"),
                 1 => {
-                    let (tx_id, receiver, received_date) = let_user_input(1)
+                    let (tx_id, receiver, received_date) = payment_mode_handler(1)
                         .await
                         .expect("Failed to construct information on payment method");
                     serde_json::value::to_value(PaymentMethod {
@@ -98,7 +91,7 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
                     .expect("failed to convert payment method to json")
                 }
                 2 => {
-                    let (tx_id, receiver, received_date) = let_user_input(2)
+                    let (tx_id, receiver, received_date) = payment_mode_handler(2)
                         .await
                         .expect("Failed to construct information on payment method");
                     serde_json::value::to_value(PaymentMethod {
@@ -110,7 +103,7 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
                     .expect("failed to convert payment method to json")
                 }
                 3 => {
-                    let (tx_id, receiver, received_date) = let_user_input(3)
+                    let (tx_id, receiver, received_date) = payment_mode_handler(3)
                         .await
                         .expect("Failed to construct information on payment method");
                     serde_json::value::to_value(PaymentMethod {
@@ -249,6 +242,12 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
     .expect("creating time for reservation failed.");
 
     // _________________________________________________________________________________________
+    println!("\nEnter property id.\n");
+    let mut property_id = String::new();
+    stdin()
+        .read_line(&mut property_id)
+        .expect("Enter pid to buffer failed.");
+
     // all these params are use filled via stdin.
     let payload = serde_json::json!({
         "name": name.trim(),
@@ -261,6 +260,7 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
         "confirmed": confirmed,
         "reservation_date": reservation_date,
         "reservation_time": reservation_time,
+        "property_id": property_id.trim().parse::<uuid::Uuid>().expect("Failed to parse into uuid type"),
     });
 
     let response = client

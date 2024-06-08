@@ -95,6 +95,7 @@ async fn create_new_property(client: Client) -> anyhow::Result<()> {
         .expect("failed to read data to buffer");
 
     let payload = serde_json::json!({
+        "property_id": uuid::Uuid::new_v4(),
         "property_name": property_name.trim(),
         "property_password": property_email.trim(),
         "property_email": property_email.trim(),
