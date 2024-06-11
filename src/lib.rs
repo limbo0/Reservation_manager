@@ -1,10 +1,3 @@
-use diesel::{
-    r2d2::{ConnectionManager, Pool},
-    PgConnection,
-};
-use dotenvy::dotenv;
-use std::{env, sync::Arc};
-
 pub mod crud;
 pub mod crud_auth;
 pub mod crud_roles;
@@ -12,6 +5,12 @@ pub mod helpers;
 pub mod models;
 pub mod schema;
 
+use diesel::{
+    r2d2::{ConnectionManager, Pool},
+    PgConnection,
+};
+use dotenvy::dotenv;
+use std::{env, sync::Arc};
 type SharedPooledConnection = Arc<Pool<ConnectionManager<PgConnection>>>;
 
 pub fn get_connection_pool() -> SharedPooledConnection {

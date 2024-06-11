@@ -6,7 +6,10 @@
 4. Filter all the reservations with property id for every property user interface, since all the data for every property is stored in the same table/db.
 
 
-
+## Help
+create .env file in the root directory and enter your database url 
+run diesel setup 
+this should create a schema folder in the src directory which contains all db tables.
 
 ## Usage
 

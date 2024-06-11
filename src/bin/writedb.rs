@@ -264,7 +264,7 @@ async fn create_new_reservation(client: Client) -> anyhow::Result<()> {
     });
 
     let response = client
-        .post("http://127.0.0.1:3000/create_resv")
+        .post("http://127.0.0.1:9000/create_resv")
         .json(&payload)
         .send()
         .await?;

@@ -66,7 +66,7 @@ async fn main() {
         .merge(property_user_routes);
 
     // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:9000")
         .await
         .unwrap();
     axum::serve(listener, app).await.unwrap();

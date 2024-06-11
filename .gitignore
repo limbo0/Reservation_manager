@@ -1,2 +1,5 @@
 /target
 .env
+plan.md
+migrations_backup/
+migrations/
